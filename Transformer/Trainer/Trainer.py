@@ -3,17 +3,18 @@ import torch
 from torch.utils.data import TensorDataset, DataLoader
 import numpy as np
 import sys
+
 def overwrite_previous_line(text):
     sys.stdout.write('\r' + text)
     sys.stdout.flush()
 
-def greedy_decoding(trm, src, detokenizer,start_token="_"):
+def greedy_decoding(trm, src, detokenizer,num,start_token="_"):
     start_token=detokenizer.pad_token_id
     start_token=torch.tensor([start_token])
     N = src.size(0)
     preds =torch.tensor( [start_token]*N).view(-1,1)
     with torch.no_grad():
-        for _ in range(10):
+        for _ in range(num):
             y_pred,a,b,c = trm(src,preds)
             t_pred = torch.argmax(y_pred[:,-1,:], axis=-1, keepdims=True)
             preds = torch.cat([preds, t_pred], axis=1)            
@@ -60,8 +61,9 @@ class Trainer:
             print("        Running_Loss: %s" %(running_loss), "VAL_ACC: %s" %acc)
 
     def evaluate(self, src, y):
-        pred = np.array(self.dec_fnc(self.model,src, self.tokenizer))
-        y_text = np.array(y[:,:11])
+        num=10
+        pred = np.array(self.dec_fnc(self.model,src, self.tokenizer,num))
+        y_text = np.array(y[:,:num+1])
         print(pred.shape,y_text.shape,pred.size)
         acc = (pred == y_text).sum() / y_text.size
         return acc
