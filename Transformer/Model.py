@@ -19,3 +19,4 @@ class Transformer(nn.Module):
         dec_outputs=self.projection(dec_outputs)
         # (batchs, n_dec_seq, n_dec_vocab), [(batchs, n_head, n_enc_seq, n_enc_seq)], [(batchs, n_head, n_dec_seq, n_dec_seq)], [(batchs, n_head, n_dec_seq, n_enc_seq)]
         return dec_outputs, enc_self_attn_probs, dec_self_attn_probs, dec_enc_attn_probs
+    
