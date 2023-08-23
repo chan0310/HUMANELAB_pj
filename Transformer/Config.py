@@ -2,7 +2,7 @@ import json
 class Config(dict): 
     __getattr__ = dict.__getitem__
     __setattr__ = dict.__setitem__
-    def __init__(self,vocabLen):
+    def __init__(self,vocabLen=3000):
         self.n_enc_vocab=vocabLen
         self.n_dec_vocab=vocabLen
         self.n_enc_seq=256
