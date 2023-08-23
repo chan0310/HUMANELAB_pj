@@ -13,12 +13,18 @@ def greedy_decoding(trm, src, detokenizer,num,start_token="_"):
     start_token=torch.tensor([start_token])
     N = src.size(0)
     preds =torch.tensor( [start_token]*N).view(-1,1)
+    t_pred=45
+    complete_pred=[]
     with torch.no_grad():
-        for _ in range(num):
-            y_pred,a,b,c = trm(src,preds)
+        while(len(preds[0])<=101):
+            y_pred,*_ = trm(src,preds)
             t_pred = torch.argmax(y_pred[:,-1,:], axis=-1, keepdims=True)
-            preds = torch.cat([preds, t_pred], axis=1)            
-        return preds
+            preds = torch.cat([preds, t_pred], axis=1)
+            if torch.sum(torch.all(t_pred==start_token,dim=-1)).item()!=0:
+                print("\n",len(preds))
+                break
+    print(preds[:,1:])    
+    return preds[:,1:]
     
 class Trainer:
     def __init__ (self, model, loss_fn, optimizer, dec_fnc, tokenizer, pad_id=0, start_token='_'):
@@ -59,11 +65,13 @@ class Trainer:
             self.losses.append(running_loss)
             acc = self.evaluate(val_src, val_tgt[:,1:])
             print("        Running_Loss: %s" %(running_loss), "VAL_ACC: %s" %acc)
+            
 
     def evaluate(self, src, y):
-        num=10
+        num=100
         pred = np.array(self.dec_fnc(self.model,src, self.tokenizer,num))
         y_text = np.array(y[:,:num+1])
         print(pred.shape,y_text.shape,pred.size)
         acc = (pred == y_text).sum() / y_text.size
+        print(self.tokenizer.convert_tokens_to_string(self.tokenizer.convert_ids_to_tokens(pred[0])))
         return acc
