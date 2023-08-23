@@ -8,6 +8,8 @@ class Seq2SeqModel(nn.Model):
         super().__init__()
 
         self.model=model
+        self.n_enc_seq=model.config.n_enc_seq
+        self.n_dec_seq=model.config.n_dec_seq
     
     def forward(self, enc_inputs, dec_inputs):
         # (batchs, n_enc_seq, d_hidn), [(batchs, n_head, n_enc_seq, n_enc_seq)]

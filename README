@@ -1,0 +1,27 @@
+Transformer
+    (emb -> enc)->(emb->dec)->output(batchs,n_dec_sec,vocablen)
+    즉 디코더 입력을 [:-1]로, 디코더 출력을 [1:]로 하게 된다.
+
+1. encoder&decoder
+    (batchs,n_enc_sec,d_hiddn ) -> (batchs,n_enc_sec,d_hiddn )
+    embedding vec (batchs,n_enc_sec,d_hiddn )
+
+3. embedding
+    (batchs,n_enc_sec,vocablen )->(batchs,n_enc_sec,d_hiddn )
+    a. n_enc_sec로 패딩되어있는 seq를 입력으로 받아야함
+    
+
+4.Config
+
+        self.n_enc_vocab=vocabLen   입력시퀸스의 vocab len
+        self.n_dec_vocab=vocabLen   출력시퀸스의 vocab len
+        self.n_enc_seq=256          입력시퀸스의 길이
+        self.n_dec_seq=256          출력시퀸스의 길이
+        self.n_layer=2              디코더,인코더 층의 개수
+        self.d_hidn=256             임베딩벡터 차원
+        self.i_pad=0                <pad>의 인덱스
+        self.d_ff=512               fodfeward 은닉층 차원
+        self.n_head=4               multiheadAttention 병렬 층 수
+        self.d_head=64              multiheadAttention의 백터 차원
+        self.dropout=0.1            
+        self.layer_norm_epsilon=1e-12
