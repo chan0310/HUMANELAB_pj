@@ -1,7 +1,7 @@
 from Transformer.Config import Config
 from Transformer.Model import Transformer
 import torch.nn as nn
-from torch import optim
+import torch
 from Seq2SeqModel.Seq2SeqModel import Seq2SeqModel
 import pandas as pd
 from transformers import AutoTokenizer
@@ -30,14 +30,19 @@ X_val=[str_to_list(i) for i in X_val]
 y_val = df_val["y_val"].values.tolist()
 y_val=[str_to_list(i) for i in y_val]
 
+if torch.cuda.is_available() : device = torch.device('cuda')
+elif torch.backends.mps.is_available() : device = torch.device('mps')
+else : device=torch.device('cpu')
+print(f'Using {device}')
+
 tokenizer= AutoTokenizer.from_pretrained("Datatset/tokenizer")
 config=Config(3)
 model=Transformer(config)
 loss_fn = nn.CrossEntropyLoss()
-optimizer = optim.Adam(model.parameters())
+optimizer = torch.optim.Adam(model.parameters())
 batchsize=64
 print("Set")
-module=Seq2SeqModel( tokenizer,optimizer,loss_fn,
-                    X_train,y_train,X_val,y_val)
+module=Seq2SeqModel( model,tokenizer,optimizer,loss_fn,
+                    X_train,y_train,X_val,y_val).to(device=device).to(device=device)
 print("train")
-module.train_main(5,4) 
+module.train_main(5) 

@@ -1,9 +1,6 @@
-from Transformer.Models import Decoder, Encoder
 from Transformer.Config import Config
 from Transformer.Model import Transformer
-import sys
 from tqdm import tqdm
-import torch
 from transformers import AutoTokenizer
 
 
@@ -12,28 +9,23 @@ import torch.nn as nn
 import torch
 from torch.nn.utils.rnn import pad_sequence
 
-def overwrite_previous_line(text):
-    sys.stdout.write('\r' + text)
-    sys.stdout.flush()
-
 class Seq2SeqModel(nn.Module):
-    def __init__(self
-                 ,tokenizer, optimizer, loss_fn
+    def __init__(self,
+                 model, tokenizer, optimizer, loss_fn
                  ,X_train, y_train, X_val, y_val,batch_size=64):
         super().__init__()
         self.tokenizer=tokenizer
         self.config=Config(len(self.tokenizer.get_vocab()))
         self.loss_fn=loss_fn
         self.optimizer=optimizer
+
         self.batch_size=batch_size
         self.train_data_loader, self.config.n_enc_seq, self.config.n_dec_seq=self.text_to_DataLoader(X_train,y_train, batch_size=self.batch_size)
         self.val_data_loader,*_=self.text_to_DataLoader(X_val,y_val, batch_size=self.batch_size)
         self.config.d_hidn=self.config.n_enc_seq
         self.config.d_ff=self.config.n_enc_seq*2
-      
 
         self.model=Transformer(self.config)
-  
         self.losses=[]
         
     def text_to_DataLoader(self,X,y, batch_size=64):
@@ -45,16 +37,18 @@ class Seq2SeqModel(nn.Module):
         loader = DataLoader(ds, batch_size=batch_size, shuffle=True)
         return loader, x1.size(-1),y.size(-1)+1
 
-    def seq_list_to_text_list(self,seqli):
-        seqli=self.text_preprocess_for_list(seqli)
-        stringli=[self.tokenizer.convert_tokens_to_string([i for i in self.tokenizer.convert_ids_to_tokens(seq)])for seq in seqli]
-        return stringli
 
-    def text_preprocess_for_list(self,list): #list-seq-wordindex list*n_seq
+    def text_preprocess_for_list(self,list:list): #list-seq-wordindex list*n_seq
         list = [torch.tensor(seq) for seq in list]
-        list= pad_sequence([seq.flip(0) for seq in list], batch_first=False, padding_value=self.tokenizer.pad_token_id).flip(1)
+        list= pad_sequence(list, batch_first=True, padding_value=self.tokenizer.pad_token_id)
         return list
-
+    
+    def seq_preprocess_for_fit(self,seq):
+        seq=seq+[self.tokenizer.pad_token_id for _ in range(self.config.n_enc_seq-len(seq))]
+        return seq
+    
+    def seq_pading(self,seq):
+         seq
     def train_each_batch(self,x1,x2,yy):
             y_pred,ea,de,eda = self.model(x1, x2)
             loss = self.loss_fn(y_pred.view(-1, y_pred.size(-1)), yy.view(-1))
