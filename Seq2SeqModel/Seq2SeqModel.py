@@ -18,21 +18,22 @@ def overwrite_previous_line(text):
 
 class Seq2SeqModel(nn.Module):
     def __init__(self
-                 , tokenizer, optimizer, loss_fn
+                 ,tokenizer, optimizer, loss_fn
                  ,X_train, y_train, X_val, y_val,batch_size=64):
         super().__init__()
         self.tokenizer=tokenizer
         self.config=Config(len(self.tokenizer.get_vocab()))
         self.loss_fn=loss_fn
         self.optimizer=optimizer
-
         self.batch_size=batch_size
         self.train_data_loader, self.config.n_enc_seq, self.config.n_dec_seq=self.text_to_DataLoader(X_train,y_train, batch_size=self.batch_size)
         self.val_data_loader,*_=self.text_to_DataLoader(X_val,y_val, batch_size=self.batch_size)
         self.config.d_hidn=self.config.n_enc_seq
         self.config.d_ff=self.config.n_enc_seq*2
+      
 
         self.model=Transformer(self.config)
+  
         self.losses=[]
         
     def text_to_DataLoader(self,X,y, batch_size=64):
@@ -51,7 +52,7 @@ class Seq2SeqModel(nn.Module):
 
     def text_preprocess_for_list(self,list): #list-seq-wordindex list*n_seq
         list = [torch.tensor(seq) for seq in list]
-        list= pad_sequence([seq.flip(-1) for seq in list], batch_first=False, padding_value=self.tokenizer.pad_token_id).flip(-1)
+        list= pad_sequence([seq.flip(0) for seq in list], batch_first=False, padding_value=self.tokenizer.pad_token_id).flip(1)
         return list
 
     def train_each_batch(self,x1,x2,yy):
