@@ -9,26 +9,29 @@ import torch.nn as nn
 import torch
 from torch.nn.utils.rnn import pad_sequence
 
-class Seq2SeqModel(nn.Module):
+class Seq2SeqModel:
     def __init__(self,
                  model, tokenizer, optimizer, loss_fn
                  ,X_train, y_train, X_val, y_val,batch_size=64):
-        super().__init__()
         self.tokenizer=tokenizer
         self.config=Config(len(self.tokenizer.get_vocab()))
-        self.loss_fn=loss_fn
-        self.optimizer=optimizer
 
+        self.config.dropout=0.2
         self.batch_size=batch_size
         self.train_data_loader, self.config.n_enc_seq, self.config.n_dec_seq=self.text_to_DataLoader(X_train,y_train, batch_size=self.batch_size)
-        self.val_data_loader,*_=self.text_to_DataLoader(X_val,y_val, batch_size=self.batch_size)
+        self.val_data_loader,*_=self.text_to_DataLoader(X_val,y_val, batch_size=1)
         self.config.d_hidn=self.config.n_enc_seq
         self.config.d_ff=self.config.n_enc_seq*2
 
-        self.model=Transformer(self.config)
-        self.losses=[]
+        self.device=torch.device("mps")
+        self.model=Transformer(self.config).to(device=self.device)
         
-    def text_to_DataLoader(self,X,y, batch_size=64):
+        print(f'Using {self.device}')
+        self.losses=[]
+        self.optimizer=torch.optim.Adam(self.model.parameters(),lr=0.01)
+        self.loss_fn=loss_fn
+        
+    def text_to_DataLoader(self,X,y, batch_size=256):
         x1=self.text_preprocess_for_list(X)
         y=self.text_preprocess_for_list(y)
         x2=y[:,:-1]
@@ -43,15 +46,27 @@ class Seq2SeqModel(nn.Module):
         list= pad_sequence(list, batch_first=True, padding_value=self.tokenizer.pad_token_id)
         return list
     
-    def seq_preprocess_for_fit(self,seq):
-        seq=seq+[self.tokenizer.pad_token_id for _ in range(self.config.n_enc_seq-len(seq))]
-        return seq
+    # for eval
+    def seq_pading(self,seq:torch.tensor):
+        seq=list(seq)+[self.tokenizer.pad_token_id for _ in range(self.config.n_enc_seq-len(seq))]
+        print("seq_padd: ",len(seq))
+        return torch.tensor(seq)
     
-    def seq_pading(self,seq):
-         seq
+    def seq_to_seq_process(self,seq): #tensor to tensor vector(d=vocab) to list(d=vocab)
+        seq=self.seq_pading(seq)
+        dec_input=self.seq_pading(torch.tensor([self.tokenizer.bos_token_id]))
+        if self.device:
+            seq=seq.to(self.device)
+            dec_input=dec_input.to(self.device)
+        output,*_=self.model(seq.view(1,-1),dec_input.view(1,-1))
+        output=[torch.argmax(i).item() for i in output.view(128,-1)]
+        return output
+    #./for eval
+
+
     def train_each_batch(self,x1,x2,yy):
             y_pred,ea,de,eda = self.model(x1, x2)
-            loss = self.loss_fn(y_pred.view(-1, y_pred.size(-1)), yy.view(-1))
+            loss = self.loss_fn(y_pred, yy)
             self.optimizer.zero_grad()
             loss.backward()
             self.optimizer.step()
@@ -59,7 +74,7 @@ class Seq2SeqModel(nn.Module):
             attentions={"enc_at":ea,"dec_at":de,"enc_dec_at":eda}
             return running_loss,attentions
             
-    def train_main(self,max_epoch,check=False):   
+    def train_main(self,max_epoch,check=False,save=False):   
         for epoch in range(1, max_epoch+1):
             self.model.train()
             running_loss = 0 
@@ -73,39 +88,58 @@ class Seq2SeqModel(nn.Module):
                      total=total,unit="batches")
                 
             for i, (x1, x2, yy) in epT:
+                yy=torch.zeros(yy.size(0),yy.size(1), self.config.n_dec_vocab).scatter_(2, yy.unsqueeze(2), 1)
+                if self.device:
+                    x1=x1.to(self.device)
+                    x2=x2.to(self.device)
+                    yy=yy.to(self.device)
                 current_loss,attentions=self.train_each_batch(x1,x2,yy)
                 running_loss+=current_loss
-                epT.set_description(f"Epoch: {epoch}/{max_epoch}   Batch: {i+1}/{total}   cost: {current_loss:.4f}")
+                
+                epT.set_description(f"Epoch: {epoch}/{max_epoch}   Batch: {i+1}/{total}   cost: {current_loss:.7f}")
                 if check and check<=i+1:
                         break
-            epT.update(1)
-            epT.close()
 
             self.model.eval()
             running_loss = round(running_loss / (i+1), 3)
             self.losses.append(running_loss)
             acc = self.evaluate()
+            print("        Running_Loss: %s" %(running_loss), "VAL_ACC: %s" %acc,end="\n")
 
+            epT.update(1)
+            epT.close() 
+            if save:
+                self.save_model_and_config(str(epoch))
+            
+    def evaluate(self): #easy eval
+        cor_cnt=0
+        epT=tqdm(enumerate(self.val_data_loader))
+        for i, (x1, x2, yy) in epT:
+            if self.device:
+                x1=x1.to(self.device)
+                x2=x2.to(self.device)
+                yy=yy.to(self.device)
 
-            print("        Running_Loss: %s" %(running_loss), "VAL_ACC: %s" %acc,end=" ")
-            
-            self.save_model_and_config(str(epoch))
-            
-    def evaluate(self):
-        return 0
+            self.model.eval()
+            predict,*attentions=self.model(x1,x2)
+            predict=predict.max(2)[1]
+            if (predict==yy).sum()>0:
+                cor_cnt+=1
+            epT.set_description(f"{i}/{len(self.val_data_loader)}")
+            if i==200:
+                break
+        return cor_cnt/(i+1)
     
     def save_model_and_config(self,name):
-        torch.save(self.model.state_dict(), "savedModel/saved"+str(name)+"/model.pth")
-        torch.save(self.config,"savedModel/saved"+str(name)+"/config.pth")
-        self.tokenizer.save_pretrained("savedModel/saved"+str(name)+"/tokenizer")
+        torch.save(self.model.state_dict(), "savedModel/saved"+str(name)+".pth")
 
     def load_model(self,path):
-        model_checkpoint = path + "/model.pth"
+        model_checkpoint = path
         self.model.load_state_dict(torch.load(model_checkpoint))
 
-        config_checkpoint = path + "/config.pth"
+        config_checkpoint = "savedTk" + "/savedconfig.pth"
         self.config = torch.load(config_checkpoint)
 
         # 토크나이저를 로드합니다.
-        tokenizer_checkpoint =path + "/tokenizer"
+        tokenizer_checkpoint ="savedTk" + "/savedtokenizer"
         self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_checkpoint)

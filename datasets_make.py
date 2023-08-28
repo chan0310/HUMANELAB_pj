@@ -46,11 +46,11 @@ tokenized_datasets = split_datasets.map(
 train_dataset = tokenized_datasets["train"]
 validation_dataset = tokenized_datasets["validation"]
 
-X_train = train_dataset["input_ids"]
-y_train = train_dataset["labels"]
+X_train = train_dataset["input_ids"][0:15000]
+y_train = train_dataset["labels"][0:15000]
 
-X_val = validation_dataset["input_ids"]
-y_val = validation_dataset["labels"]
+X_val = validation_dataset["input_ids"][:2000]
+y_val = validation_dataset["labels"][:2000]
 
 import pandas as pd
 df_train = pd.DataFrame({
@@ -63,7 +63,7 @@ df_val = pd.DataFrame({
     "y_val": y_val,
 })
 
-tokenizer.save_pretrained("Datatset/tokenizer")
+tokenizer.save_pretrained("Datatset2/tokenizer")
 
-df_train.to_csv("Datatset/train.csv",index=False)
-df_val.to_csv("Datatset/val.csv",index=False)
+df_train.to_csv("Datatset2/train.csv",index=False)
+df_val.to_csv("Datatset2/val.csv",index=False)

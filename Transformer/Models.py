@@ -16,6 +16,7 @@ class Embeding(nn.Module):
         sinusoid_table[:, 1::2] = np.cos(sinusoid_table[:, 1::2])  # odd index cos
 
         return sinusoid_table
+    
     def __init__(self,config,n_vocab,pos_seq):
         super().__init__()
         self.config=config
