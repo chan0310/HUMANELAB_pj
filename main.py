@@ -8,7 +8,7 @@ import torch.nn.init as init
 # CSV 파일에서 데이터 불러오기
 df_train = pd.read_csv("Datatset2/train.csv")
 df_val = pd.read_csv("Datatset2/val.csv")
-tokenizer= AutoTokenizer.from_pretrained("Datatset2/tokenizer")
+tokenizer= AutoTokenizer.from_pretrained("Datatset/tokenizer")
 
 def str_to_list(input_string):
     cleaned_string = input_string.strip("[]").replace(" ", "")
@@ -31,28 +31,19 @@ y_val=[str_to_list(i) for i in y_val]
 
 device = torch.device('mps')
 
-print(f'Using {device}')
-
 tokenizer= AutoTokenizer.from_pretrained("Datatset/tokenizer")
 model=None
-loss_fn = nn.CrossEntropyLoss()
+class_weights = torch.ones(tokenizer.vocab_size+1).to(device=device)
+class_weights[tokenizer.pad_token_id]=0.1
+class_weights[tokenizer.pad_token_id-1]=0.1
+loss_fn = nn.CrossEntropyLoss(label_smoothing=0.01,weight=class_weights)
 optimizer=None
 batchsize=64
+lr=0.005
 print("Set")
-module=Seq2SeqModel( model,tokenizer,optimizer,loss_fn,
+module=Seq2SeqModel( tokenizer,loss_fn,lr,
                     X_train,y_train,X_val,y_val,batch_size=batchsize)
-
-def weight_init_xavier_uniform(submodule):
-    if isinstance(submodule, torch.nn.Conv2d):
-        torch.nn.init.xavier_uniform_(submodule.weight)
-        submodule.bias.data.fill_(0.01)
-    elif isinstance(submodule, torch.nn.Linear):
-        init.kaiming_uniform_(submodule.weight, mode='fan_in', nonlinearity='relu')
-        if submodule.bias is not None:
-            init.constant_(submodule.bias, 0.0)
-
-module.model.apply(weight_init_xavier_uniform)
-
+print(module.config.n_dec_seq)
 
 print("train")
-module.train_main(20) 
+module.train_main(20,save=True) 

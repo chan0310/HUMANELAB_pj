@@ -61,6 +61,9 @@ class Encoder(nn.Module):
         self.scale_emb = scale_emb
         self.d_model = config.d_hidn
 
+        self.encoder_batch_norms = nn.ModuleList([nn.BatchNorm1d(self.config.d_hidn) for _ in range(self.config.n_layer)])
+
+
     def forward(self, inputs):
         # (batchs, n_enc_seq, d_hidn)
         outputs = self.emb(inputs)
@@ -73,10 +76,13 @@ class Encoder(nn.Module):
         attn_mask = get_pad_mask(inputs, inputs, self.config.i_pad)
 
         attn_probs = []
-        for layer in self.layers:
+        for layer, batch_norm_layer in zip(self.layers, self.encoder_batch_norms):
             # (batchs, n_enc_seq, d_hidn), (batchs, n_head, n_enc_seq, n_enc_seq)
             outputs, attn_prob = layer(outputs, attn_mask)
             attn_probs.append(attn_prob)
+
+            outputs =batch_norm_layer(outputs)
+
         # (batchs, n_enc_seq, d_hidn), [(batchs, n_head, n_enc_seq, n_enc_seq)]
         return outputs, attn_probs
     
@@ -91,6 +97,9 @@ class Decoder(nn.Module):
         self.scale_emb = scale_emb
         self.d_model = config.d_hidn
         self.layer_norm = nn.LayerNorm(config.d_hidn, eps=config.layer_norm_epsilon)
+
+        self.decoder_batch_norms = nn.ModuleList([nn.BatchNorm1d(self.config.d_hidn-1) for _ in range(self.config.n_layer)])
+
     def forward(self, dec_inputs, enc_inputs, enc_outputs):
        
         # (batchs, n_dec_seq, d_hidn)
@@ -110,10 +119,15 @@ class Decoder(nn.Module):
         dec_enc_attn_mask = get_pad_mask(dec_inputs, enc_inputs, self.config.i_pad)
 
         self_attn_probs, dec_enc_attn_probs = [], []
-        for layer in self.layers:
+
+        for layer, batch_norm_layer in zip(self.layers, self.decoder_batch_norms):
             # (batchs, n_dec_seq, d_hidn), (batchs, n_dec_seq, n_dec_seq), (bs, n_dec_seq, n_enc_seq)
             dec_outputs, self_attn_prob, dec_enc_attn_prob = layer(dec_outputs, enc_outputs, dec_self_attn_mask, dec_enc_attn_mask)
             self_attn_probs.append(self_attn_prob)
             dec_enc_attn_probs.append(dec_enc_attn_prob)
+
+            # 배치 정규화를 적용
+            dec_outputs = batch_norm_layer(dec_outputs)
+
         # (batchs, n_dec_seq, d_hidn), [(batchs, n_dec_seq, n_dec_seq)], [(bs, n_dec_seq, n_enc_seq)]
         return dec_outputs, self_attn_probs, dec_enc_attn_probs

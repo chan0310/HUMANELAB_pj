@@ -7,11 +7,11 @@ class MultiHeadAttention(nn.Module):
         super().__init__()
         self.config = config
 
-        self.W_Q = nn.Linear(self.config.d_hidn, self.config.n_head * self.config.d_head)
-        self.W_K = nn.Linear(self.config.d_hidn, self.config.n_head * self.config.d_head)
-        self.W_V = nn.Linear(self.config.d_hidn, self.config.n_head * self.config.d_head)
+        self.W_Q = nn.Linear(self.config.d_hidn, self.config.n_head * self.config.d_head,bias=False)
+        self.W_K = nn.Linear(self.config.d_hidn, self.config.n_head * self.config.d_head,bias=False)
+        self.W_V = nn.Linear(self.config.d_hidn, self.config.n_head * self.config.d_head,bias=False)
         self.scaled_dot_attn = ScaledDotProductAttention(self.config)
-        self.linear = nn.Linear(self.config.n_head * self.config.d_head, self.config.d_hidn)
+        self.linear = nn.Linear(self.config.n_head * self.config.d_head, self.config.d_hidn,bias=False)
         self.dropout = nn.Dropout(config.dropout)
     
     def forward(self, Q, K, V, attn_mask):
@@ -36,22 +36,24 @@ class MultiHeadAttention(nn.Module):
         # (batchs, n_q_seq, d_hidn), (batchs, n_head, n_q_seq, n_k_seq)
         return output, attn_prob
 
-
+    
 class PoswiseFeedForwardNet(nn.Module):
     def __init__(self, config):
         super().__init__()
         self.config = config
 
-        self.conv1 = nn.Conv1d(in_channels=self.config.d_hidn, out_channels=self.config.d_ff, kernel_size=1)
-        self.conv2 = nn.Conv1d(in_channels=self.config.d_ff, out_channels=self.config.d_hidn, kernel_size=1)
+        self.conv1 = nn.Linear(self.config.d_hidn,self.config.d_ff)
+        self.conv2 = nn.Linear(self.config.d_ff,self.config.d_hidn)
         self.active = F.gelu
         self.dropout = nn.Dropout(config.dropout)
 
     def forward(self, inputs):
-        # (batchs, d_ff, n_seq)
-        output = self.active(self.conv1(inputs.transpose(1, 2)))
+        # (batchs, n_seq, d_ff)
+        output = self.conv1(inputs)
+        output = self.active(output)
+
         # (batchs, n_seq, d_hidn)
-        output = self.conv2(output).transpose(1, 2)
+        output = self.conv2(output)
         output = self.dropout(output)
         # (batchs, n_seq, d_hidn)
         return output
