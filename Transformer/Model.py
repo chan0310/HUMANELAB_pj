@@ -11,6 +11,11 @@ class Transformer(nn.Module):
         self.decoder = Decoder(self.config)
         self.projection = nn.Linear(self.config.d_hidn, self.config.n_dec_vocab)
         self.soft=nn.Softmax(dim=-1)
+        
+        # Share the weight between target word embedding & last dense layer
+        self.projection.weight = self.decoder.emb.emb.weight
+
+        self.encoder.emb.emb.weight = self.decoder.emb.emb.weight
 
     def forward(self, enc_inputs, dec_inputs):
         # (batchs, n_enc_seq, d_hidn), [(batchs, n_head, n_enc_seq, n_enc_seq)]

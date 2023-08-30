@@ -29,7 +29,7 @@ X_val=[str_to_list(i) for i in X_val]
 y_val = df_val["y_val"].values.tolist()
 y_val=[str_to_list(i) for i in y_val]
 
-device = torch.device('mps')
+device = torch.device('cpu')
 
 tokenizer= AutoTokenizer.from_pretrained("Datatset/tokenizer")
 model=None
@@ -42,8 +42,9 @@ batchsize=64
 lr=0.005
 print("Set")
 module=Seq2SeqModel( tokenizer,loss_fn,lr,
-                    X_train,y_train,X_val,y_val,batch_size=batchsize)
+                    X_train,y_train,X_val,y_val,batch_size=batchsize,device=torch.device("cpu"))
 print(module.config.n_dec_seq)
 
+module.train_main(1,1)
 print("train")
-module.train_main(20,save=True) 
+module.load_model("saved16.pth")
