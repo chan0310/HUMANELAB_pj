@@ -8,7 +8,8 @@ from transformers import AutoTokenizer
 
 model_checkpoint = "Helsinki-NLP/opus-mt-en-fr"
 tokenizer = AutoTokenizer.from_pretrained(model_checkpoint, return_tensors="pt")
-tokenizer.add_special_tokens({"bos_token": "<bos>"})
+tokenizer.add_special_tokens({"bos_token": "<bos>", "unk_token": "<unk>"})
+tokenizer.pad_token_id = 0
 
 en_sentence = split_datasets["train"][1]["translation"]["en"]
 fr_sentence = split_datasets["train"][1]["translation"]["fr"]
@@ -63,7 +64,7 @@ df_val = pd.DataFrame({
     "y_val": y_val,
 })
 
-tokenizer.save_pretrained("Datatset2/tokenizer")
+tokenizer.save_pretrained("Datatset3/tokenizer")
 
-df_train.to_csv("Datatset2/train.csv",index=False)
-df_val.to_csv("Datatset2/val.csv",index=False)
+df_train.to_csv("Datatset3/train.csv",index=False)
+df_val.to_csv("Datatset3/val.csv",index=False)

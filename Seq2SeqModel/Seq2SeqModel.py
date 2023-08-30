@@ -14,18 +14,20 @@ class Seq2SeqModel:
     def __init__(self,
                   tokenizer,  loss_fn,lr
                  ,X_train, y_train, X_val, y_val,batch_size=64,device=torch.device("mps"),
-                 n_head=3,n_layer=4):
+                 n_head=3,n_layer=4,d_hidn=512):
         self.tokenizer=tokenizer
         self.config=Config(len(self.tokenizer.get_vocab()))
 
         self.config.dropout=0.2
+        
         self.config.n_head=n_head; self.config.n_layer=n_layer #for overfitting
         self.batch_size=batch_size
         self.train_data_loader, self.config.n_enc_seq, self.config.n_dec_seq=self.text_to_DataLoader(X_train,y_train, batch_size=self.batch_size)
         self.val_data_loader,*_=self.text_to_DataLoader(X_val,y_val, batch_size=1)
-        self.config.d_hidn=self.config.n_enc_seq
+        self.config.d_hidn=d_hidn
+        self.config.i_pad=tokenizer.pad_token_id
         self.config.d_head=self.config.d_hidn
-        self.config.d_ff=self.config.n_enc_seq*2
+        self.config.d_ff=self.config.d_hidn*2
 
         self.device=device
         self.model=Transformer(self.config).to(device=self.device)
@@ -52,36 +54,37 @@ class Seq2SeqModel:
     
     # for eval
     def seq_pading(self,seq:torch.tensor,e=0):
-        seq=list(seq)+[self.tokenizer.pad_token_id for _ in range(self.config.n_enc_seq-len(seq)-e)]
+        seq=seq+[self.tokenizer.pad_token_id for _ in range(self.config.n_enc_seq-len(seq)-e)]
         print("seq_padd: ",len(seq))
         return torch.tensor(seq)
     
     def seq_to_seq_process(self,seq,seqd): #tensor to tensor vector(d=vocab) to list(d=vocab)
         seq=self.seq_pading(seq)
-        dec_input=self.seq_pading(torch.tensor([self.tokenizer.bos_token_id]))
+        dec_input=self.seq_pading([self.tokenizer.bos_token_id])
         dec_input=self.seq_pading(seqd[:-1],1)
+
+        print(self.tokenizer.convert_tokens_to_string(self.tokenizer.convert_ids_to_tokens(seq)))
+        print(self.tokenizer.convert_tokens_to_string(self.tokenizer.convert_ids_to_tokens(dec_input)))
         if self.device:
             seq=seq.to(self.device)
             dec_input=dec_input.to(self.device)
         output,*_=self.model(seq.view(1,-1),dec_input.view(1,-1))
-        output=[torch.argmax(i).item() for i in output.view(output.size(1),-1)]
+        output=torch.max(output,dim=-1)[1]
         return output,seq,dec_input
     #./for eval
 
 
     def train_each_batch(self,x1,x2,yy):
             y_pred,ea,de,eda = self.model(x1, x2)
+            self.optimizer.zero_grad()
             loss = self.loss_fn(y_pred.view(y_pred.size(0)*y_pred.size(1),y_pred.size(2))
                                 ,yy.view(-1))
 
-            self.optimizer.zero_grad()
             
-
             loss.backward()
             self.optimizer.step()
             running_loss = loss.item()
-            attentions={"enc_at":ea,"dec_at":de,"enc_dec_at":eda}
-            return running_loss,attentions
+            return running_loss
             
     def train_main(self,max_epoch,check=False,save=False,curLossstep=34):   
         accs=[]
@@ -104,10 +107,10 @@ class Seq2SeqModel:
                     x1=x1.to(self.device)
                     x2=x2.to(self.device)
                     yy=yy.to(self.device)
-                current_loss,attentions=self.train_each_batch(x1,x2,yy)
+                current_loss=self.train_each_batch(x1,x2,yy)
                 running_loss+=current_loss
                 if i%curLossstep==0:
-                    cur_losses.append(cur_losses)
+                    cur_losses.append(current_loss)
                 
                 epT.set_description(f"Epoch: {epoch}/{max_epoch}   Batch: {i+1}/{total}   cost: {current_loss}")
                 if check and check<=i+1:
@@ -116,8 +119,14 @@ class Seq2SeqModel:
             self.model.eval()
             running_loss = round(running_loss / (i+1), 7)
             self.losses.append(running_loss)
-            acc = self.evaluate(running_loss)
+            acc,c_words = self.evaluate(running_loss)
             accs.append(acc)
+
+            with open("savedModel/c_words","a") as file:
+                file.write(f"{epoch} epoch  " )
+                for words in c_words:
+                    file.write(f"{self.tokenizer.convert_ids_to_tokens(words)}   ")
+                file.write("\n")
 
             epT.update(1)
             epT.close() 
@@ -132,6 +141,7 @@ class Seq2SeqModel:
     
     def evaluate(self,running_loss): #easy eval
         cor_cnt=0
+        corr_words=[]
         epT=tqdm(enumerate(self.val_data_loader))
         for i, (x1, x2, yy) in epT:
             if self.device:
@@ -143,16 +153,16 @@ class Seq2SeqModel:
             predict,*attentions=self.model(x1,x2)
 
             random.seed(42)
-            r_idx=random.randint(0, predict.size(0))
             predict=predict.max(2)[1]
+            r_idx=random.randint(0, predict.size(1))
+            while yy[0,r_idx]==self.tokenizer.pad_token_id:
+                r_idx=random.randint(0,r_idx)
 
-            if(predict[r_idx].shape!=yy[r_idx].shape):
-                print("오류")
-
-            if (predict[0,r_idx].item()==yy[0,r_idx].item()):
+            if (predict[0,r_idx].item()==yy[0,r_idx]):
                 cor_cnt+=1
-            epT.set_description(f"{i}/{len(self.val_data_loader)}Running_Loss: %s {running_loss}   VAL_ACC: %s {cor_cnt/(i+1)}")
-        return cor_cnt/(i+1)
+                corr_words.append(yy[0,r_idx])
+            epT.set_description(f"{i}/{len(self.val_data_loader)}  Running_Loss: %s {running_loss}   VAL_ACC: %s {cor_cnt/(i+1)}")
+        return cor_cnt/(i+1),corr_words
     
     def save_model_and_config(self,name,cur_losses,enu_loss):
         torch.save(self.model.state_dict(), "savedModel/saved"+str(name)+".pth")

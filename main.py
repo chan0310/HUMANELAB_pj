@@ -6,9 +6,9 @@ from transformers import AutoTokenizer
 import torch.nn.init as init
 
 # CSV 파일에서 데이터 불러오기
-df_train = pd.read_csv("Datatset2/train.csv")
-df_val = pd.read_csv("Datatset2/val.csv")
-tokenizer= AutoTokenizer.from_pretrained("Datatset/tokenizer")
+df_train = pd.read_csv("Datatset3/train.csv")
+df_val = pd.read_csv("Datatset3/val.csv")
+tokenizer= AutoTokenizer.from_pretrained("Datatset3/tokenizer")
 
 def str_to_list(input_string):
     cleaned_string = input_string.strip("[]").replace(" ", "")
@@ -40,11 +40,12 @@ loss_fn = nn.CrossEntropyLoss(label_smoothing=0.01,weight=class_weights)
 optimizer=None
 batchsize=64
 lr=0.005
+print(len(tokenizer.get_vocab()),len(X_train),len(y_train))
 print("Set")
 module=Seq2SeqModel( tokenizer,loss_fn,lr,
                     X_train,y_train,X_val,y_val,batch_size=batchsize,device=torch.device("cpu"))
 print(module.config.n_dec_seq)
 
-module.train_main(1,1)
+module.train_main(4,100)
 print("train")
 module.load_model("saved16.pth")

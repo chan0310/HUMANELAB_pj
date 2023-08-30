@@ -23,7 +23,7 @@ class Embeding(nn.Module):
         self.n_vocab=n_vocab
         self.pos_seq=pos_seq
 
-        self.emb=nn.Embedding(self.n_vocab, config.d_hidn)
+        self.emb=nn.Embedding(self.n_vocab, config.d_hidn,padding_idx=self.config.i_pad)
         sinusoid_table=torch.FloatTensor(self.get_sinusoid_encoding_table(pos_seq+1,self.config.d_hidn))
         self.pos_emb=nn.Embedding.from_pretrained(sinusoid_table,freeze=True)
 
@@ -61,9 +61,6 @@ class Encoder(nn.Module):
         self.scale_emb = scale_emb
         self.d_model = config.d_hidn
 
-        self.encoder_batch_norms = nn.ModuleList([nn.BatchNorm1d(self.config.d_hidn) for _ in range(self.config.n_layer)])
-
-
     def forward(self, inputs):
         # (batchs, n_enc_seq, d_hidn)
         outputs = self.emb(inputs)
@@ -76,12 +73,11 @@ class Encoder(nn.Module):
         attn_mask = get_pad_mask(inputs, inputs, self.config.i_pad)
 
         attn_probs = []
-        for layer, batch_norm_layer in zip(self.layers, self.encoder_batch_norms):
+        for layer in self.layers:
             # (batchs, n_enc_seq, d_hidn), (batchs, n_head, n_enc_seq, n_enc_seq)
             outputs, attn_prob = layer(outputs, attn_mask)
             attn_probs.append(attn_prob)
 
-            outputs =batch_norm_layer(outputs)
 
         # (batchs, n_enc_seq, d_hidn), [(batchs, n_head, n_enc_seq, n_enc_seq)]
         return outputs, attn_probs
@@ -120,14 +116,12 @@ class Decoder(nn.Module):
 
         self_attn_probs, dec_enc_attn_probs = [], []
 
-        for layer, batch_norm_layer in zip(self.layers, self.decoder_batch_norms):
+        for layer in self.layers:
             # (batchs, n_dec_seq, d_hidn), (batchs, n_dec_seq, n_dec_seq), (bs, n_dec_seq, n_enc_seq)
             dec_outputs, self_attn_prob, dec_enc_attn_prob = layer(dec_outputs, enc_outputs, dec_self_attn_mask, dec_enc_attn_mask)
             self_attn_probs.append(self_attn_prob)
             dec_enc_attn_probs.append(dec_enc_attn_prob)
 
-            # 배치 정규화를 적용
-            dec_outputs = batch_norm_layer(dec_outputs)
 
         # (batchs, n_dec_seq, d_hidn), [(batchs, n_dec_seq, n_dec_seq)], [(bs, n_dec_seq, n_enc_seq)]
         return dec_outputs, self_attn_probs, dec_enc_attn_probs

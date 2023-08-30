@@ -14,7 +14,7 @@ class Config(dict):
         self.n_head=4
         self.d_head=256
         self.dropout=0.5
-        self.layer_norm_epsilon=1e-12
+        self.layer_norm_epsilon=1e-5
     @classmethod
     def load(cls, file):
         with open(file, 'r') as f:
